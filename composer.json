@@ -1,0 +1,26 @@
+{
+  "name": "tourze/quic-recovery",
+  "description": "QUIC协议丢包检测和恢复机制",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": "^8.1",
+    "tourze/quic-core": "0.0.*",
+    "tourze/quic-packets": "0.0.*",
+    "tourze/quic-frames": "0.0.*"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Tourze\\QUIC\\Recovery\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tourze\\QUIC\\Recovery\\Tests\\": "tests/"
+    }
+  }
+}
