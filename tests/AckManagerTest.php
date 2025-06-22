@@ -275,7 +275,6 @@ final class AckManagerTest extends TestCase
         
         $stats = $this->ackManager->getStats();
         
-        $this->assertIsArray($stats);
         $this->assertEquals(3, $stats['received_packets']);
         $this->assertEquals(3, $stats['pending_acks']);
         $this->assertEquals(4, $stats['largest_received']);

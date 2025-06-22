@@ -44,8 +44,7 @@ final class LossDetectionTest extends TestCase
     {
         // 没有已确认的包时应该返回空的丢包列表
         $result = $this->lossDetection->detectLostPackets(1000.0);
-        
-        $this->assertIsArray($result);
+
         $this->assertArrayHasKey('lost_packets', $result);
         $this->assertArrayHasKey('loss_time', $result);
         $this->assertEmpty($result['lost_packets']);
@@ -67,7 +66,7 @@ final class LossDetectionTest extends TestCase
         $result = $this->lossDetection->detectLostPackets(1300.0);
 
         // 根据包号差异，包1-4应该被认为丢失（10-1=9, 10-2=8, 10-3=7, 10-4=6 >= 3）
-        $this->assertIsArray($result);
+
         $this->assertArrayHasKey('lost_packets', $result);
         $this->assertNotEmpty($result['lost_packets']);
         
@@ -95,7 +94,6 @@ final class LossDetectionTest extends TestCase
         // 很久之后检测丢包
         $result = $this->lossDetection->detectLostPackets(2000.0);
 
-        $this->assertIsArray($result);
         $this->assertArrayHasKey('lost_packets', $result);
         // 应该有一些包因为时间超时被标记为丢失
         $this->assertNotEmpty($result['lost_packets']);
@@ -151,7 +149,6 @@ final class LossDetectionTest extends TestCase
 
         $result = $this->lossDetection->onLossDetectionTimeout(1300.0);
 
-        $this->assertIsArray($result);
         $this->assertArrayHasKey('action', $result);
         $this->assertArrayHasKey('packets', $result);
         
@@ -167,7 +164,6 @@ final class LossDetectionTest extends TestCase
 
         $result = $this->lossDetection->onLossDetectionTimeout(2000.0); // 很久之后
 
-        $this->assertIsArray($result);
         $this->assertEquals('pto_probe', $result['action']);
         $this->assertArrayHasKey('packets', $result);
         $this->assertNotEmpty($result['packets']);
@@ -248,7 +244,6 @@ final class LossDetectionTest extends TestCase
     {
         $stats = $this->lossDetection->getStats();
 
-        $this->assertIsArray($stats);
         $this->assertArrayHasKey('pto_count', $stats);
         $this->assertArrayHasKey('loss_time', $stats);
         $this->assertArrayHasKey('persistent_congestion', $stats);
@@ -305,11 +300,11 @@ final class LossDetectionTest extends TestCase
 
         // 5. 触发超时
         $timeoutResult = $this->lossDetection->onLossDetectionTimeout(1400.0);
-        $this->assertIsArray($timeoutResult);
+
         $this->assertContains($timeoutResult['action'], ['loss_detection', 'pto_probe']);
 
         // 6. 检查统计信息
         $stats = $this->lossDetection->getStats();
-        $this->assertIsArray($stats);
+
     }
 } 

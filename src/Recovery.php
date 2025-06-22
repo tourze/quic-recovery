@@ -31,8 +31,7 @@ final class Recovery
         $this->retransmissionManager = new RetransmissionManager(
             $this->rttEstimator,
             $this->packetTracker,
-            $this->lossDetection,
-            $this->ackManager
+            $this->lossDetection
         );
     }
 

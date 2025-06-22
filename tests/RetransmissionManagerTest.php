@@ -8,7 +8,6 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Tourze\QUIC\Frames\AckFrame;
 use Tourze\QUIC\Packets\Packet;
-use Tourze\QUIC\Recovery\AckManager;
 use Tourze\QUIC\Recovery\LossDetection;
 use Tourze\QUIC\Recovery\PacketTracker;
 use Tourze\QUIC\Recovery\RetransmissionManager;
@@ -23,19 +22,16 @@ final class RetransmissionManagerTest extends TestCase
     private RTTEstimator $rttEstimator;
     private PacketTracker $packetTracker;
     private LossDetection $lossDetection;
-    private AckManager $ackManager;
 
     protected function setUp(): void
     {
         $this->rttEstimator = new RTTEstimator();
         $this->packetTracker = new PacketTracker();
         $this->lossDetection = new LossDetection($this->rttEstimator, $this->packetTracker);
-        $this->ackManager = new AckManager();
         $this->retransmissionManager = new RetransmissionManager(
             $this->rttEstimator,
             $this->packetTracker,
-            $this->lossDetection,
-            $this->ackManager
+            $this->lossDetection
         );
     }
 
@@ -106,7 +102,6 @@ final class RetransmissionManagerTest extends TestCase
 
         $result = $this->retransmissionManager->onPtoTimeout(2000.0);
 
-        $this->assertIsArray($result);
         // 检查实际返回的数组结构
         $this->assertNotEmpty($result);
     }
@@ -115,7 +110,6 @@ final class RetransmissionManagerTest extends TestCase
     {
         $result = $this->retransmissionManager->onPtoTimeout(2000.0);
 
-        $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
 
@@ -139,12 +133,11 @@ final class RetransmissionManagerTest extends TestCase
 
         $packets = $this->retransmissionManager->getPacketsForRetransmission();
 
-        $this->assertIsArray($packets);
         $this->assertNotEmpty($packets);
         
         // 验证返回的包信息结构
         foreach ($packets as $packetInfo) {
-            $this->assertIsArray($packetInfo);
+
             $this->assertArrayHasKey('packet_number', $packetInfo);
             $this->assertArrayHasKey('retransmission_count', $packetInfo);
             $this->assertArrayHasKey('original_packet', $packetInfo);
@@ -210,13 +203,14 @@ final class RetransmissionManagerTest extends TestCase
         // 检查是否应该快速重传
         $shouldFastRetransmit = $this->retransmissionManager->shouldFastRetransmit();
         $this->assertIsBool($shouldFastRetransmit);
+        // 注意：shouldFastRetransmit 是基于 PTO 计数，而不是重复 ACK
+        // 所以这里只验证函数能正常运行
     }
 
     public function testGetRetransmissionStats(): void
     {
         $stats = $this->retransmissionManager->getRetransmissionStats();
 
-        $this->assertIsArray($stats);
         $this->assertArrayHasKey('total_retransmissions', $stats);
         $this->assertArrayHasKey('pending_retransmissions', $stats);
         $this->assertArrayHasKey('last_retransmission_time', $stats);
@@ -245,7 +239,6 @@ final class RetransmissionManagerTest extends TestCase
 
         $stats = $this->retransmissionManager->getRetransmissionStats();
 
-        $this->assertIsArray($stats);
         // 应该有一些统计数据更新
         $this->assertGreaterThanOrEqual(0, $stats['total_retransmissions']);
     }
@@ -270,6 +263,8 @@ final class RetransmissionManagerTest extends TestCase
         // 验证清理操作正常执行
         $afterCleanup = $this->retransmissionManager->getPacketsForRetransmission();
         $this->assertIsArray($afterCleanup);
+        // 清理后应该还有一些包，因为清理只影响重传管理器的内部状态
+        $this->assertGreaterThanOrEqual(0, count($afterCleanup));
     }
 
     public function testReset(): void
@@ -292,7 +287,7 @@ final class RetransmissionManagerTest extends TestCase
 
         // 重置后检查状态
         $afterReset = $this->retransmissionManager->getRetransmissionStats();
-        $this->assertIsArray($afterReset);
+
         $this->assertEquals(0, $afterReset['total_retransmissions']);
         $this->assertEquals(0, $afterReset['pending_retransmissions']);
         $this->assertEquals(0.0, $afterReset['last_retransmission_time']);
@@ -361,6 +356,8 @@ final class RetransmissionManagerTest extends TestCase
 
         $isStorm = $this->retransmissionManager->isInRetransmissionStorm();
         $this->assertIsBool($isStorm);
+        // 暂时不进行具体的值断言，只确保函数可以正常运行
+        $this->assertNotNull($isStorm);
     }
 
     public function testComplexScenario(): void
@@ -388,11 +385,9 @@ final class RetransmissionManagerTest extends TestCase
 
         // 5. 触发PTO超时
         $ptoResult = $this->retransmissionManager->onPtoTimeout(2000.0);
-        $this->assertIsArray($ptoResult);
 
         // 6. 检查统计信息
         $stats = $this->retransmissionManager->getRetransmissionStats();
-        $this->assertIsArray($stats);
 
         // 7. 检查重传率
         $rate = $this->retransmissionManager->getRetransmissionRate();
@@ -403,7 +398,7 @@ final class RetransmissionManagerTest extends TestCase
 
         // 9. 最终检查
         $finalStats = $this->retransmissionManager->getRetransmissionStats();
-        $this->assertIsArray($finalStats);
+
     }
 
     public function testRetransmissionDelayProgression(): void

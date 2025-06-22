@@ -164,8 +164,7 @@ final class RTTEstimatorTest extends TestCase
         $this->estimator->updateRtt(250.0);
         
         $stats = $this->estimator->getStats();
-        
-        $this->assertIsArray($stats);
+
         $this->assertArrayHasKey('smoothed_rtt', $stats);
         $this->assertArrayHasKey('rtt_variation', $stats);
         $this->assertArrayHasKey('min_rtt', $stats);

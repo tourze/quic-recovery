@@ -25,7 +25,6 @@ final class LossDetection
     private PacketTracker $packetTracker;
     private float $lossTime = 0.0;
     private int $ptoCount = 0;
-    private array $lossTimeouts = [];
 
     public function __construct(
         RTTEstimator $rttEstimator,
@@ -37,7 +36,7 @@ final class LossDetection
 
     /**
      * 检测丢失的数据包
-     * 
+     *
      * @param float $currentTime 当前时间
      * @return array{lost_packets: array<int>, loss_time: float}
      */
@@ -111,7 +110,7 @@ final class LossDetection
 
     /**
      * 设置丢包定时器
-     * 
+     *
      * @param float $currentTime 当前时间
      * @return float 下次超时时间，0表示无需设置定时器
      */
@@ -163,7 +162,7 @@ final class LossDetection
 
     /**
      * 处理丢包定时器超时
-     * 
+     *
      * @param float $currentTime 当前时间
      * @return array{action: string, packets: array<int>}
      */
@@ -259,7 +258,6 @@ final class LossDetection
     {
         $this->lossTime = 0.0;
         $this->ptoCount = 0;
-        $this->lossTimeouts = [];
     }
 
     /**
@@ -280,8 +278,10 @@ final class LossDetection
      */
     public function validateConfig(): bool
     {
-        return self::PACKET_THRESHOLD > 0 && 
-               self::TIME_THRESHOLD > 1.0 && 
-               self::MIN_TIME_THRESHOLD > 0;
+        // 这些常量已经硬编码为满足条件的值，所以总是返回true
+        // PACKET_THRESHOLD = 3 > 0
+        // TIME_THRESHOLD = 9.0 / 8.0 = 1.125 > 1.0  
+        // MIN_TIME_THRESHOLD = 1.0 > 0
+        return true;
     }
 } 

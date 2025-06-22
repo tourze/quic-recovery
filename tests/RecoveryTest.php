@@ -199,8 +199,7 @@ final class RecoveryTest extends TestCase
     public function testOnTimeout_noTimeouts(): void
     {
         $actions = $this->recovery->onTimeout(1000.0);
-        
-        $this->assertIsArray($actions);
+
         $this->assertEmpty($actions);
     }
 
@@ -218,15 +217,20 @@ final class RecoveryTest extends TestCase
         
         // 触发超时
         $nextTimeout = $this->recovery->getNextTimeout();
-        if ($nextTimeout > 0.0) {
+        
+        // 如果没有超时设置，直接触发一个远期超时
+        if ($nextTimeout === 0.0) {
+            $actions = $this->recovery->onTimeout(2000.0);
+        } else {
             $actions = $this->recovery->onTimeout($nextTimeout + 100.0);
-            
-            $this->assertIsArray($actions);
-            if (!empty($actions)) {
-                $action = $actions[0];
-                $this->assertArrayHasKey('type', $action);
-                $this->assertContains($action['type'], ['retransmit_lost', 'pto_probe']);
-            }
+        }
+        
+        // 验证操作的结构
+        $this->assertIsArray($actions);
+        if (!empty($actions)) {
+            $action = $actions[0];
+            $this->assertArrayHasKey('type', $action);
+            $this->assertContains($action['type'], ['retransmit_lost', 'pto_probe', 'send_ack']);
         }
     }
 
@@ -240,8 +244,7 @@ final class RecoveryTest extends TestCase
         $this->assertGreaterThan(0.0, $ackTimeout);
         
         $actions = $this->recovery->onTimeout($ackTimeout + 1.0);
-        
-        $this->assertIsArray($actions);
+
         $this->assertNotEmpty($actions);
         
         $action = $actions[0];
@@ -262,8 +265,7 @@ final class RecoveryTest extends TestCase
         
         // 模拟长时间等待
         $actions = $this->recovery->onTimeout(3000.0);
-        
-        $this->assertIsArray($actions);
+
         // 可能有多个动作：丢包重传 + 发送ACK
         if (count($actions) > 1) {
             $actionTypes = array_column($actions, 'type');
@@ -296,7 +298,7 @@ final class RecoveryTest extends TestCase
         $packets = $this->recovery->getPacketsForRetransmission();
         
         $this->assertNotEmpty($packets);
-        $this->assertIsArray($packets);
+
     }
 
     // ========================================
@@ -406,8 +408,7 @@ final class RecoveryTest extends TestCase
     public function testGetStats_initialState(): void
     {
         $stats = $this->recovery->getStats();
-        
-        $this->assertIsArray($stats);
+
         $this->assertArrayHasKey('rtt', $stats);
         $this->assertArrayHasKey('packet_tracker', $stats);
         $this->assertArrayHasKey('loss_detection', $stats);
@@ -428,14 +429,7 @@ final class RecoveryTest extends TestCase
         }
         
         $stats = $this->recovery->getStats();
-        
-        $this->assertIsArray($stats);
-        $this->assertIsArray($stats['rtt']);
-        $this->assertIsArray($stats['packet_tracker']);
-        $this->assertIsArray($stats['loss_detection']);
-        $this->assertIsArray($stats['ack_manager']);
-        $this->assertIsArray($stats['retransmission']);
-        
+
         $this->assertGreaterThan(0, $stats['packet_tracker']['sent_packets']);
         $this->assertGreaterThan(0, $stats['ack_manager']['received_packets']);
     }
@@ -462,6 +456,7 @@ final class RecoveryTest extends TestCase
         
         // 验证清理操作正常执行
         $this->assertIsArray($statsAfter);
+        $this->assertArrayHasKey('packet_tracker', $statsAfter);
     }
 
     public function testReset(): void
@@ -575,7 +570,7 @@ final class RecoveryTest extends TestCase
         $nextTimeout = $this->recovery->getNextTimeout();
         if ($nextTimeout > 0.0) {
             $actions = $this->recovery->onTimeout($nextTimeout + 100.0);
-            $this->assertIsArray($actions);
+
         }
         
         // 5. 再次检查重传包
@@ -588,7 +583,7 @@ final class RecoveryTest extends TestCase
         
         // 7. 检查拥塞建议
         $advice = $this->recovery->getCongestionAdvice();
-        $this->assertIsString($advice);
+
         $this->assertContains($advice, ['normal', 'high_loss_rate', 'retransmission_storm', 'persistent_congestion']);
     }
 

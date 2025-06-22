@@ -37,7 +37,7 @@ final class RTTEstimator
 
     /**
      * 更新RTT测量值
-     * 
+     *
      * @param float $rttSample RTT样本（毫秒）
      * @param float $ackDelay ACK延迟（毫秒）
      */
@@ -108,7 +108,7 @@ final class RTTEstimator
 
     /**
      * 计算PTO (Probe Timeout) 超时值
-     * 
+     *
      * @param int $ptoCount PTO重传次数
      */
     public function calculatePto(int $ptoCount = 0): float

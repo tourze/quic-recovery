@@ -22,7 +22,6 @@ final class RetransmissionManager
     private RTTEstimator $rttEstimator;
     private PacketTracker $packetTracker;
     private LossDetection $lossDetection;
-    private AckManager $ackManager;
     
     /** @var array<int, int> 包重传次数统计 */
     private array $retransmissionCounts = [];
@@ -36,13 +35,11 @@ final class RetransmissionManager
     public function __construct(
         RTTEstimator $rttEstimator,
         PacketTracker $packetTracker,
-        LossDetection $lossDetection,
-        AckManager $ackManager
+        LossDetection $lossDetection
     ) {
         $this->rttEstimator = $rttEstimator;
         $this->packetTracker = $packetTracker;
         $this->lossDetection = $lossDetection;
-        $this->ackManager = $ackManager;
     }
 
     /**
@@ -230,7 +227,7 @@ final class RetransmissionManager
             $count++;
         }
         
-        return $count > 0 ? $totalDelay / $count : 0.0;
+        return $totalDelay / $count;
     }
 
     /**

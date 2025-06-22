@@ -121,7 +121,7 @@ final class AckManager
 
     /**
      * 构建ACK范围
-     * 
+     *
      * @return array<array{int, int}> ACK范围数组
      */
     private function buildAckRanges(): array
@@ -171,7 +171,7 @@ final class AckManager
 
     /**
      * 处理发送的ACK帧
-     * 
+     *
      * @param array<array{int, int}> $ackRanges 已确认的范围
      */
     public function onAckSent(array $ackRanges): void
@@ -187,7 +187,7 @@ final class AckManager
 
     /**
      * 检测丢失的包（基于接收到的包序列）
-     * 
+     *
      * @return array<int> 可能丢失的包号
      */
     public function detectMissingPackets(): array
@@ -242,7 +242,7 @@ final class AckManager
 
     /**
      * 清理旧的接收包记录
-     * 
+     *
      * @param float $cutoffTime 截止时间，早于此时间的记录将被清理
      */
     public function cleanupOldRecords(float $cutoffTime): void

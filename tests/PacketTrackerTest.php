@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tourze\QUIC\Recovery\Tests;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Tourze\QUIC\Packets\Packet;
 use Tourze\QUIC\Recovery\PacketTracker;
@@ -22,7 +23,7 @@ final class PacketTrackerTest extends TestCase
 
     private function createMockPacket(int $size = 1200): Packet
     {
-        /** @var Packet $packet */
+        /** @var MockObject&Packet $packet */
         $packet = $this->createMock(Packet::class);
         $packet->method('getSize')->willReturn($size);
         return $packet;
@@ -402,8 +403,7 @@ final class PacketTrackerTest extends TestCase
         $this->tracker->onPacketLost(3);
         
         $stats = $this->tracker->getStats();
-        
-        $this->assertIsArray($stats);
+
         $this->assertEquals(3, $stats['sent_packets']);
         $this->assertEquals(1, $stats['acked_packets']);
         $this->assertEquals(1, $stats['lost_packets']);

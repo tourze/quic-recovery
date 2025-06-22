@@ -59,7 +59,7 @@ final class PacketTracker
 
     /**
      * 处理收到的ACK确认
-     * 
+     *
      * @param array<array{int, int}> $ackRanges ACK范围 [[start, end], ...]
      * @param float $ackTime 收到ACK的时间
      * @return array{newly_acked: array<int>, ack_eliciting_acked: bool}
@@ -122,7 +122,7 @@ final class PacketTracker
 
     /**
      * 检测丢失的数据包
-     * 
+     *
      * @param float $lossThreshold 丢包阈值
      * @param float $currentTime 当前时间
      * @return array<int> 丢失的包号列表
@@ -244,7 +244,7 @@ final class PacketTracker
 
     /**
      * 获取所有已发送数据包
-     * 
+     *
      * @return array<int, SentPacketInfo>
      */
     public function getSentPackets(): array
@@ -270,7 +270,7 @@ final class PacketTracker
 
     /**
      * 获取未确认的数据包
-     * 
+     *
      * @return array<SentPacketInfo>
      */
     public function getUnackedPackets(): array
