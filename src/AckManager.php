@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Tourze\QUIC\Recovery;
 
 use Tourze\QUIC\Frames\AckFrame;
+use Tourze\QUIC\Recovery\Exception\InvalidPacketNumberException;
 
 /**
  * ACK管理器
- * 
+ *
  * 负责生成和处理ACK帧，管理接收到的包的确认状态
  */
 final class AckManager
@@ -40,7 +41,7 @@ final class AckManager
         bool $ackEliciting = true
     ): void {
         if ($packetNumber < 0) {
-            throw new \InvalidArgumentException('包号不能为负数');
+            throw new InvalidPacketNumberException('包号不能为负数');
         }
 
         // 检查是否为重复包

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tourze\QUIC\Recovery;
 
+use Tourze\QUIC\Recovery\Exception\InvalidRttSampleException;
+use Tourze\QUIC\Recovery\Exception\InvalidPtoCountException;
+
 /**
  * RTT估算器
- * 
+ *
  * 根据RFC 9002实现往返时间估算
  * 用于丢包检测和拥塞控制
  */
@@ -44,7 +47,7 @@ final class RTTEstimator
     public function updateRtt(float $rttSample, float $ackDelay = 0.0): void
     {
         if ($rttSample <= 0) {
-            throw new \InvalidArgumentException('RTT样本必须大于0');
+            throw new InvalidRttSampleException('RTT样本必须大于0');
         }
 
         $this->latestRtt = $rttSample;
@@ -114,7 +117,7 @@ final class RTTEstimator
     public function calculatePto(int $ptoCount = 0): float
     {
         if ($ptoCount < 0) {
-            throw new \InvalidArgumentException('PTO计数不能为负数');
+            throw new InvalidPtoCountException('PTO计数不能为负数');
         }
 
         // PTO = smoothed_rtt + max(4*rtt_var, kGranularity) + max_ack_delay

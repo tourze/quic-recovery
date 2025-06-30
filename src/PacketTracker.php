@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Tourze\QUIC\Recovery;
 
 use Tourze\QUIC\Packets\Packet;
+use Tourze\QUIC\Recovery\Exception\InvalidPacketNumberException;
 
 /**
  * 包追踪器
- * 
+ *
  * 用于跟踪已发送数据包的状态，支持丢包检测和重传
  */
 final class PacketTracker
@@ -37,7 +38,7 @@ final class PacketTracker
         bool $ackEliciting = true
     ): void {
         if ($packetNumber < 0) {
-            throw new \InvalidArgumentException('包号不能为负数');
+            throw new InvalidPacketNumberException('包号不能为负数');
         }
 
         $this->sentPackets[$packetNumber] = new SentPacketInfo(

@@ -6,7 +6,7 @@ namespace Tourze\QUIC\Recovery;
 
 /**
  * 丢包检测器
- * 
+ *
  * 根据RFC 9002实现丢包检测算法
  * 支持基于时间和包号的检测机制
  */

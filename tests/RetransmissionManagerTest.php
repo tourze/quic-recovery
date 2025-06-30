@@ -202,7 +202,7 @@ final class RetransmissionManagerTest extends TestCase
 
         // 检查是否应该快速重传
         $shouldFastRetransmit = $this->retransmissionManager->shouldFastRetransmit();
-        $this->assertIsBool($shouldFastRetransmit);
+        $this->assertNotNull($shouldFastRetransmit);
         // 注意：shouldFastRetransmit 是基于 PTO 计数，而不是重复 ACK
         // 所以这里只验证函数能正常运行
     }
@@ -262,7 +262,7 @@ final class RetransmissionManagerTest extends TestCase
 
         // 验证清理操作正常执行
         $afterCleanup = $this->retransmissionManager->getPacketsForRetransmission();
-        $this->assertIsArray($afterCleanup);
+        $this->assertNotNull($afterCleanup);
         // 清理后应该还有一些包，因为清理只影响重传管理器的内部状态
         $this->assertGreaterThanOrEqual(0, count($afterCleanup));
     }
@@ -355,7 +355,6 @@ final class RetransmissionManagerTest extends TestCase
         }
 
         $isStorm = $this->retransmissionManager->isInRetransmissionStorm();
-        $this->assertIsBool($isStorm);
         // 暂时不进行具体的值断言，只确保函数可以正常运行
         $this->assertNotNull($isStorm);
     }
