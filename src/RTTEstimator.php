@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tourze\QUIC\Recovery;
 
-use Tourze\QUIC\Recovery\Exception\InvalidRttSampleException;
 use Tourze\QUIC\Recovery\Exception\InvalidPtoCountException;
+use Tourze\QUIC\Recovery\Exception\InvalidRttSampleException;
 
 /**
  * RTT估算器
@@ -17,17 +17,21 @@ final class RTTEstimator
 {
     // 默认初始RTT值（毫秒）
     private const DEFAULT_INITIAL_RTT = 333;
-    
+
     // 最小RTT值（毫秒）
     private const MIN_RTT = 1;
-    
+
     // 最大ACK延迟（毫秒）
     private const MAX_ACK_DELAY = 25;
 
     private float $smoothedRtt;
+
     private float $rttVariation;
+
     private float $minRtt;
+
     private float $latestRtt;
+
     private int $sampleCount = 0;
 
     public function __construct(float $initialRtt = self::DEFAULT_INITIAL_RTT)
@@ -42,7 +46,7 @@ final class RTTEstimator
      * 更新RTT测量值
      *
      * @param float $rttSample RTT样本（毫秒）
-     * @param float $ackDelay ACK延迟（毫秒）
+     * @param float $ackDelay  ACK延迟（毫秒）
      */
     public function updateRtt(float $rttSample, float $ackDelay = 0.0): void
     {
@@ -51,7 +55,7 @@ final class RTTEstimator
         }
 
         $this->latestRtt = $rttSample;
-        
+
         // 更新最小RTT
         if ($rttSample < $this->minRtt) {
             $this->minRtt = $rttSample;
@@ -64,7 +68,7 @@ final class RTTEstimator
         }
 
         // 首次RTT测量
-        if ($this->sampleCount === 0) {
+        if (0 === $this->sampleCount) {
             $this->smoothedRtt = $adjustedRtt;
             $this->rttVariation = $adjustedRtt / 2;
         } else {
@@ -74,7 +78,7 @@ final class RTTEstimator
             $this->smoothedRtt = 0.875 * $this->smoothedRtt + 0.125 * $adjustedRtt;
         }
 
-        $this->sampleCount++;
+        ++$this->sampleCount;
     }
 
     /**
@@ -121,8 +125,8 @@ final class RTTEstimator
         }
 
         // PTO = smoothed_rtt + max(4*rtt_var, kGranularity) + max_ack_delay
-        $pto = $this->smoothedRtt + 
-               max(4 * $this->rttVariation, 1.0) + 
+        $pto = $this->smoothedRtt +
+               max(4 * $this->rttVariation, 1.0) +
                self::MAX_ACK_DELAY;
 
         // 指数退避
@@ -147,6 +151,8 @@ final class RTTEstimator
 
     /**
      * 获取RTT统计信息
+     *
+     * @return array<string, mixed>
      */
     public function getStats(): array
     {
@@ -158,4 +164,4 @@ final class RTTEstimator
             'sample_count' => $this->sampleCount,
         ];
     }
-} 
+}

@@ -14,30 +14,28 @@ final class LossDetection
 {
     // 包重排序阈值（包号差值）
     private const PACKET_THRESHOLD = 3;
-    
+
     // 时间重排序阈值倍数
     private const TIME_THRESHOLD = 9.0 / 8.0;
-    
+
     // 最小时间阈值（毫秒）
     private const MIN_TIME_THRESHOLD = 1.0;
 
-    private RTTEstimator $rttEstimator;
-    private PacketTracker $packetTracker;
     private float $lossTime = 0.0;
+
     private int $ptoCount = 0;
 
     public function __construct(
-        RTTEstimator $rttEstimator,
-        PacketTracker $packetTracker
+        private readonly RTTEstimator $rttEstimator,
+        private readonly PacketTracker $packetTracker,
     ) {
-        $this->rttEstimator = $rttEstimator;
-        $this->packetTracker = $packetTracker;
     }
 
     /**
      * 检测丢失的数据包
      *
      * @param float $currentTime 当前时间
+     *
      * @return array{lost_packets: array<int>, loss_time: float}
      */
     public function detectLostPackets(float $currentTime): array
@@ -46,48 +44,84 @@ final class LossDetection
         $lossTime = 0.0;
 
         $largestAcked = $this->packetTracker->getLargestAcked();
-        
+
         if ($largestAcked < 0) {
             return ['lost_packets' => $lostPackets, 'loss_time' => $lossTime];
         }
 
-        // 计算丢包时间阈值
         $lossDelay = $this->calculateLossDelay();
 
         foreach ($this->packetTracker->getSentPackets() as $packetNumber => $sentInfo) {
-            // 跳过已确认或已丢失的包
-            if ($this->packetTracker->isAcked($packetNumber) || 
-                $this->packetTracker->isLost($packetNumber)) {
+            if ($this->shouldSkipPacket($packetNumber)) {
                 continue;
             }
 
-            // 基于包号的丢包检测
-            if ($largestAcked - $packetNumber >= self::PACKET_THRESHOLD) {
-                $lostPackets[] = $packetNumber;
-                $this->packetTracker->onPacketLost($packetNumber);
-                continue;
-            }
+            $result = $this->checkPacketLoss($packetNumber, $sentInfo, $largestAcked, $lossDelay, $currentTime);
 
-            // 基于时间的丢包检测
-            $timeSinceSent = $currentTime - $sentInfo->getSentTime();
-            if ($timeSinceSent >= $lossDelay) {
+            if ($result['is_lost']) {
                 $lostPackets[] = $packetNumber;
                 $this->packetTracker->onPacketLost($packetNumber);
-            } else {
-                // 计算预期丢包时间
-                $expectedLossTime = $sentInfo->getSentTime() + $lossDelay;
-                if ($lossTime === 0.0 || $expectedLossTime < $lossTime) {
-                    $lossTime = $expectedLossTime;
-                }
+            } elseif ($result['expected_loss_time'] > 0.0) {
+                $lossTime = $this->updateLossTime($lossTime, $result['expected_loss_time']);
             }
         }
 
         $this->lossTime = $lossTime;
-        
+
         return [
             'lost_packets' => $lostPackets,
             'loss_time' => $lossTime,
         ];
+    }
+
+    /**
+     * 检查是否应跳过数据包
+     */
+    private function shouldSkipPacket(int $packetNumber): bool
+    {
+        return $this->packetTracker->isAcked($packetNumber)
+            || $this->packetTracker->isLost($packetNumber);
+    }
+
+    /**
+     * 检查单个数据包是否丢失
+     *
+     * @return array{is_lost: bool, expected_loss_time: float}
+     */
+    private function checkPacketLoss(
+        int $packetNumber,
+        SentPacketInfo $sentInfo,
+        int $largestAcked,
+        float $lossDelay,
+        float $currentTime,
+    ): array {
+        // 基于包号的丢包检测
+        if ($largestAcked - $packetNumber >= self::PACKET_THRESHOLD) {
+            return ['is_lost' => true, 'expected_loss_time' => 0.0];
+        }
+
+        // 基于时间的丢包检测
+        $timeSinceSent = $currentTime - $sentInfo->getSentTime();
+        if ($timeSinceSent >= $lossDelay) {
+            return ['is_lost' => true, 'expected_loss_time' => 0.0];
+        }
+
+        // 计算预期丢包时间
+        $expectedLossTime = $sentInfo->getSentTime() + $lossDelay;
+
+        return ['is_lost' => false, 'expected_loss_time' => $expectedLossTime];
+    }
+
+    /**
+     * 更新丢包时间
+     */
+    private function updateLossTime(float $currentLossTime, float $expectedLossTime): float
+    {
+        if (0.0 === $currentLossTime || $expectedLossTime < $currentLossTime) {
+            return $expectedLossTime;
+        }
+
+        return $currentLossTime;
     }
 
     /**
@@ -97,40 +131,39 @@ final class LossDetection
     {
         $smoothedRtt = $this->rttEstimator->getSmoothedRtt();
         $rttVar = $this->rttEstimator->getRttVariation();
-        
+
         // loss_delay = time_threshold * max(latest_rtt, smoothed_rtt)
         $latestRtt = $this->rttEstimator->getLatestRtt();
         $maxRtt = max($latestRtt, $smoothedRtt);
-        
+
         $lossDelay = self::TIME_THRESHOLD * $maxRtt;
-        
+
         // 确保不小于最小阈值
         return max($lossDelay, self::MIN_TIME_THRESHOLD);
     }
 
     /**
-     * 设置丢包定时器
+     * 计算丢包检测超时时间
      *
      * @param float $currentTime 当前时间
+     *
      * @return float 下次超时时间，0表示无需设置定时器
      */
-    public function setLossDetectionTimer(float $currentTime): float
+    public function calculateLossDetectionTimeout(float $currentTime): float
     {
         $timeout = $this->getEarliestLossTime($currentTime);
-        
+
         if ($timeout > 0.0) {
             return $timeout;
         }
 
         // 如果没有ACK引发的数据包在外，不需要设置定时器
-        if ($this->packetTracker->getAckElicitingOutstanding() === 0) {
+        if (0 === $this->packetTracker->getAckElicitingOutstanding()) {
             return 0.0;
         }
 
         // 设置PTO定时器
-        $ptoTimeout = $this->calculatePtoTimeout($currentTime);
-        
-        return $ptoTimeout;
+        return $this->calculatePtoTimeout($currentTime);
     }
 
     /**
@@ -141,7 +174,7 @@ final class LossDetection
         if ($this->lossTime > 0.0 && $this->lossTime > $currentTime) {
             return $this->lossTime;
         }
-        
+
         return 0.0;
     }
 
@@ -152,11 +185,11 @@ final class LossDetection
     {
         $pto = $this->rttEstimator->calculatePto($this->ptoCount);
         $lastSentTime = $this->packetTracker->getTimeOfLastSentAckEliciting();
-        
-        if ($lastSentTime === 0.0) {
+
+        if (0.0 === $lastSentTime) {
             return $currentTime + $pto;
         }
-        
+
         return $lastSentTime + $pto;
     }
 
@@ -164,15 +197,17 @@ final class LossDetection
      * 处理丢包定时器超时
      *
      * @param float $currentTime 当前时间
+     *
      * @return array{action: string, packets: array<int>}
      */
     public function onLossDetectionTimeout(float $currentTime): array
     {
         $earliestLossTime = $this->getEarliestLossTime($currentTime);
-        
+
         if ($earliestLossTime > 0.0 && $currentTime >= $earliestLossTime) {
             // 丢包定时器超时
             $result = $this->detectLostPackets($currentTime);
+
             return [
                 'action' => 'loss_detection',
                 'packets' => $result['lost_packets'],
@@ -185,11 +220,13 @@ final class LossDetection
 
     /**
      * 处理PTO超时
+     *
+     * @return array{action: string, packets: array<int>}
      */
     private function onPtoTimeout(float $currentTime): array
     {
-        $this->ptoCount++;
-        
+        ++$this->ptoCount;
+
         // 发送PTO探测包
         return [
             'action' => 'pto_probe',
@@ -199,13 +236,15 @@ final class LossDetection
 
     /**
      * 选择需要探测的数据包
+     *
+     * @return array<int>
      */
     private function selectProbePackets(): array
     {
         // 选择最旧的未确认包进行重传
         $unackedPackets = $this->packetTracker->getUnackedPackets();
-        
-        if (empty($unackedPackets)) {
+
+        if ([] === $unackedPackets) {
             return [];
         }
 
@@ -214,8 +253,10 @@ final class LossDetection
             return $a->getSentTime() <=> $b->getSentTime();
         });
 
-        // 最多选择2个包进行探测
-        return array_slice($unackedPackets, 0, 2);
+        // 最多选择2个包进行探测，返回包号数组
+        $selectedPackets = array_slice($unackedPackets, 0, 2);
+
+        return array_map(fn ($packet) => $packet->getPacketNumber(), $selectedPackets);
     }
 
     /**
@@ -262,6 +303,8 @@ final class LossDetection
 
     /**
      * 获取统计信息
+     *
+     * @return array<string, mixed>
      */
     public function getStats(): array
     {
@@ -280,8 +323,8 @@ final class LossDetection
     {
         // 这些常量已经硬编码为满足条件的值，所以总是返回true
         // PACKET_THRESHOLD = 3 > 0
-        // TIME_THRESHOLD = 9.0 / 8.0 = 1.125 > 1.0  
+        // TIME_THRESHOLD = 9.0 / 8.0 = 1.125 > 1.0
         // MIN_TIME_THRESHOLD = 1.0 > 0
         return true;
     }
-} 
+}

@@ -15,31 +15,25 @@ final class RetransmissionManager
 {
     // 最大重传次数
     private const MAX_RETRANSMISSIONS = 5;
-    
+
     // 重传指数退避基数
     private const RETRANSMISSION_BACKOFF = 2.0;
 
-    private RTTEstimator $rttEstimator;
-    private PacketTracker $packetTracker;
-    private LossDetection $lossDetection;
-    
     /** @var array<int, int> 包重传次数统计 */
     private array $retransmissionCounts = [];
-    
+
     /** @var array<int, float> 包重传时间记录 */
     private array $retransmissionTimes = [];
-    
+
     private int $totalRetransmissions = 0;
+
     private float $lastRetransmissionTime = 0.0;
 
     public function __construct(
-        RTTEstimator $rttEstimator,
-        PacketTracker $packetTracker,
-        LossDetection $lossDetection
+        private readonly RTTEstimator $rttEstimator,
+        private readonly PacketTracker $packetTracker,
+        private readonly LossDetection $lossDetection,
     ) {
-        $this->rttEstimator = $rttEstimator;
-        $this->packetTracker = $packetTracker;
-        $this->lossDetection = $lossDetection;
     }
 
     /**
@@ -49,17 +43,17 @@ final class RetransmissionManager
     {
         $ackRanges = $ackFrame->getAckRanges();
         $result = $this->packetTracker->onAckReceived($ackRanges, $ackTime);
-        
+
         // 更新RTT估算
         foreach ($result['newly_acked'] as $packetNumber) {
             $this->updateRttFromAck($packetNumber, $ackFrame, $ackTime);
         }
 
         // 检测丢包
-        if (!empty($result['newly_acked'])) {
+        if ([] !== $result['newly_acked']) {
             $this->lossDetection->onAckReceived();
             $lossResult = $this->lossDetection->detectLostPackets($ackTime);
-            
+
             foreach ($lossResult['lost_packets'] as $lostPacket) {
                 $this->scheduleLostPacketRetransmission($lostPacket);
             }
@@ -72,14 +66,14 @@ final class RetransmissionManager
     private function updateRttFromAck(int $packetNumber, AckFrame $ackFrame, float $ackTime): void
     {
         $sentPackets = $this->packetTracker->getSentPackets();
-        
+
         if (!isset($sentPackets[$packetNumber])) {
             return;
         }
 
         $sentInfo = $sentPackets[$packetNumber];
         $rttSample = $ackTime - $sentInfo->getSentTime();
-        
+
         // 只有最大确认包号才用于RTT计算
         if ($packetNumber === $ackFrame->getLargestAcked()) {
             $ackDelay = $ackFrame->getAckDelay() / 1000.0; // 转换为毫秒
@@ -94,24 +88,26 @@ final class RetransmissionManager
     {
         // 检查重传次数限制
         $retransmissionCount = $this->retransmissionCounts[$packetNumber] ?? 0;
-        
+
         if ($retransmissionCount >= self::MAX_RETRANSMISSIONS) {
             // 达到最大重传次数，放弃重传
             return;
         }
 
         $this->retransmissionCounts[$packetNumber] = $retransmissionCount + 1;
-        $this->totalRetransmissions++;
+        ++$this->totalRetransmissions;
     }
 
     /**
      * 处理PTO超时
+     *
+     * @return array<array<string, mixed>>
      */
     public function onPtoTimeout(float $currentTime): array
     {
         $result = $this->lossDetection->onLossDetectionTimeout($currentTime);
-        
-        if ($result['action'] === 'pto_probe') {
+
+        if ('pto_probe' === $result['action']) {
             return $this->scheduleProbeRetransmissions($result['packets'], $currentTime);
         }
 
@@ -120,40 +116,51 @@ final class RetransmissionManager
 
     /**
      * 调度探测重传
+     *
+     * @param array<int> $packets
+     * @return array<array<string, mixed>>
      */
     private function scheduleProbeRetransmissions(array $packets, float $currentTime): array
     {
         $retransmissionPackets = [];
-        
-        foreach ($packets as $sentInfo) {
-            $packetNumber = $sentInfo->getPacketNumber();
-            
+
+        foreach ($packets as $packetNumber) {
+            // 获取已发送的包信息
+            $sentPackets = $this->packetTracker->getSentPackets();
+            if (!isset($sentPackets[$packetNumber])) {
+                continue;
+            }
+
+            $sentInfo = $sentPackets[$packetNumber];
+
             // 记录重传时间
             $this->retransmissionTimes[$packetNumber] = $currentTime;
             $this->lastRetransmissionTime = $currentTime;
-            
+
             $retransmissionPackets[] = [
                 'packet_number' => $packetNumber,
                 'original_packet' => $sentInfo->getPacket(),
                 'retransmission_count' => $this->retransmissionCounts[$packetNumber] ?? 0,
             ];
         }
-        
+
         return $retransmissionPackets;
     }
 
     /**
      * 获取需要重传的数据包
+     *
+     * @return array<array{packet_number: int, original_packet: mixed, retransmission_count: int}>
      */
     public function getPacketsForRetransmission(): array
     {
         $retransmissionPackets = [];
         $lostPackets = $this->packetTracker->getPacketsForRetransmission();
-        
+
         foreach ($lostPackets as $sentInfo) {
             $packetNumber = $sentInfo->getPacketNumber();
             $retransmissionCount = $this->retransmissionCounts[$packetNumber] ?? 0;
-            
+
             if ($retransmissionCount < self::MAX_RETRANSMISSIONS) {
                 $retransmissionPackets[] = [
                     'packet_number' => $packetNumber,
@@ -163,7 +170,7 @@ final class RetransmissionManager
                 ];
             }
         }
-        
+
         return $retransmissionPackets;
     }
 
@@ -174,7 +181,7 @@ final class RetransmissionManager
     {
         $baseDelay = $this->rttEstimator->getSmoothedRtt();
         $backoffMultiplier = pow(self::RETRANSMISSION_BACKOFF, $retransmissionCount);
-        
+
         return $baseDelay * $backoffMultiplier;
     }
 
@@ -184,8 +191,7 @@ final class RetransmissionManager
     public function onRetransmissionAcked(int $originalPacketNumber, int $newPacketNumber): void
     {
         // 清理原包的重传计数
-        unset($this->retransmissionCounts[$originalPacketNumber]);
-        unset($this->retransmissionTimes[$originalPacketNumber]);
+        unset($this->retransmissionCounts[$originalPacketNumber], $this->retransmissionTimes[$originalPacketNumber]);
     }
 
     /**
@@ -199,6 +205,8 @@ final class RetransmissionManager
 
     /**
      * 获取重传统计信息
+     *
+     * @return array<string, mixed>
      */
     public function getRetransmissionStats(): array
     {
@@ -215,18 +223,18 @@ final class RetransmissionManager
      */
     private function calculateAverageRetransmissionDelay(): float
     {
-        if (empty($this->retransmissionCounts)) {
+        if ([] === $this->retransmissionCounts) {
             return 0.0;
         }
 
         $totalDelay = 0.0;
         $count = 0;
-        
-        foreach ($this->retransmissionCounts as $packetNumber => $retransmissionCount) {
+
+        foreach ($this->retransmissionCounts as $retransmissionCount) {
             $totalDelay += $this->calculateRetransmissionDelay($retransmissionCount);
-            $count++;
+            ++$count;
         }
-        
+
         return $totalDelay / $count;
     }
 
@@ -237,8 +245,7 @@ final class RetransmissionManager
     {
         foreach ($this->retransmissionTimes as $packetNumber => $retransmissionTime) {
             if ($retransmissionTime < $cutoffTime) {
-                unset($this->retransmissionCounts[$packetNumber]);
-                unset($this->retransmissionTimes[$packetNumber]);
+                unset($this->retransmissionCounts[$packetNumber], $this->retransmissionTimes[$packetNumber]);
             }
         }
     }
@@ -260,11 +267,11 @@ final class RetransmissionManager
     public function getRetransmissionRate(): float
     {
         $totalSent = $this->packetTracker->getLargestSent() + 1;
-        
+
         if ($totalSent <= 0) {
             return 0.0;
         }
-        
+
         return $this->totalRetransmissions / $totalSent;
     }
 
@@ -275,4 +282,4 @@ final class RetransmissionManager
     {
         return $this->getRetransmissionRate() > 0.5; // 重传率超过50%
     }
-} 
+}

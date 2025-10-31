@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace Tourze\QUIC\Recovery\Tests\Exception;
 
-use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use Tourze\PHPUnitBase\AbstractExceptionTestCase;
 use Tourze\QUIC\Recovery\Exception\InvalidPacketNumberException;
 
 /**
  * InvalidPacketNumberException 类测试
+ *
+ * @internal
  */
-final class InvalidPacketNumberExceptionTest extends TestCase
+#[CoversClass(InvalidPacketNumberException::class)]
+final class InvalidPacketNumberExceptionTest extends AbstractExceptionTestCase
 {
     public function testExceptionIsInstanceOfInvalidArgumentException(): void
     {
         $exception = new InvalidPacketNumberException('Test message');
-        
+
         $this->assertInstanceOf(\InvalidArgumentException::class, $exception);
     }
 
@@ -23,7 +27,7 @@ final class InvalidPacketNumberExceptionTest extends TestCase
     {
         $message = 'Packet number is invalid';
         $exception = new InvalidPacketNumberException($message);
-        
+
         $this->assertEquals($message, $exception->getMessage());
     }
 
@@ -31,7 +35,7 @@ final class InvalidPacketNumberExceptionTest extends TestCase
     {
         $code = 123;
         $exception = new InvalidPacketNumberException('Test message', $code);
-        
+
         $this->assertEquals($code, $exception->getCode());
     }
 
@@ -39,7 +43,7 @@ final class InvalidPacketNumberExceptionTest extends TestCase
     {
         $previous = new \RuntimeException('Previous exception');
         $exception = new InvalidPacketNumberException('Test message', 0, $previous);
-        
+
         $this->assertSame($previous, $exception->getPrevious());
     }
 }

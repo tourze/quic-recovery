@@ -15,11 +15,15 @@ use Tourze\QUIC\Packets\Packet;
 final class Recovery
 {
     private RTTEstimator $rttEstimator;
+
     private PacketTracker $packetTracker;
+
     private LossDetection $lossDetection;
+
     private AckManager $ackManager;
+
     private RetransmissionManager $retransmissionManager;
-    
+
     private float $nextTimeout = 0.0;
 
     public function __construct(float $initialRtt = 333.0)
@@ -42,7 +46,7 @@ final class Recovery
         int $packetNumber,
         Packet $packet,
         float $sentTime,
-        bool $ackEliciting = true
+        bool $ackEliciting = true,
     ): void {
         $this->packetTracker->onPacketSent($packetNumber, $packet, $sentTime, $ackEliciting);
         $this->updateLossDetectionTimer($sentTime);
@@ -54,7 +58,7 @@ final class Recovery
     public function onPacketReceived(
         int $packetNumber,
         float $receiveTime,
-        bool $ackEliciting = true
+        bool $ackEliciting = true,
     ): void {
         $this->ackManager->onPacketReceived($packetNumber, $receiveTime, $ackEliciting);
     }
@@ -86,32 +90,82 @@ final class Recovery
 
     /**
      * 处理超时事件
+     *
+     * @return array<array{type: string, packets?: array<int>|array<array<string, mixed>>, frame?: mixed}>
      */
     public function onTimeout(float $currentTime): array
     {
         $actions = [];
 
         // 检查丢包检测超时
+        $lossActions = $this->handleLossDetectionTimeout($currentTime);
+        $actions = array_merge($actions, $lossActions);
+
+        // 检查ACK超时
+        $ackActions = $this->handleAckTimeout($currentTime);
+
+        return array_merge($actions, $ackActions);
+    }
+
+    /**
+     * 处理丢包检测超时
+     *
+     * @return array<array{type: string, packets: array<int>|array<array<string, mixed>>}>
+     */
+    private function handleLossDetectionTimeout(float $currentTime): array
+    {
+        $actions = [];
+
         if ($this->nextTimeout > 0.0 && $currentTime >= $this->nextTimeout) {
             $result = $this->lossDetection->onLossDetectionTimeout($currentTime);
-            
-            if ($result['action'] === 'loss_detection') {
-                $actions[] = [
-                    'type' => 'retransmit_lost',
-                    'packets' => $result['packets'],
-                ];
-            } elseif ($result['action'] === 'pto_probe') {
-                $probePackets = $this->retransmissionManager->onPtoTimeout($currentTime);
-                $actions[] = [
-                    'type' => 'pto_probe',
-                    'packets' => $probePackets,
-                ];
+            $action = $this->createLossDetectionAction($result, $currentTime);
+
+            if (null !== $action) {
+                $actions[] = $action;
             }
-            
+
             $this->updateLossDetectionTimer($currentTime);
         }
 
-        // 检查ACK超时
+        return $actions;
+    }
+
+    /**
+     * 创建丢包检测相关的动作
+     *
+     * @param array{action: string, packets: array<int>} $result
+     * @return array{type: string, packets: array<int>|array<array<string, mixed>>}|null
+     */
+    private function createLossDetectionAction(array $result, float $currentTime): ?array
+    {
+        if ('loss_detection' === $result['action']) {
+            return [
+                'type' => 'retransmit_lost',
+                'packets' => $result['packets'],
+            ];
+        }
+
+        if ('pto_probe' === $result['action']) {
+            $probePackets = $this->retransmissionManager->onPtoTimeout($currentTime);
+
+            return [
+                'type' => 'pto_probe',
+                'packets' => $probePackets,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * 处理ACK超时
+     *
+     * @return array<array{type: string, frame?: mixed}>
+     */
+    private function handleAckTimeout(float $currentTime): array
+    {
+        $actions = [];
+
         if ($this->ackManager->hasAckPending()) {
             $ackTimeout = $this->ackManager->getAckTimeout();
             if ($ackTimeout > 0.0 && $currentTime >= $ackTimeout) {
@@ -127,6 +181,8 @@ final class Recovery
 
     /**
      * 获取需要重传的数据包
+     *
+     * @return array<array<string, mixed>>
      */
     public function getPacketsForRetransmission(): array
     {
@@ -138,7 +194,7 @@ final class Recovery
      */
     private function updateLossDetectionTimer(float $currentTime): void
     {
-        $this->nextTimeout = $this->lossDetection->setLossDetectionTimer($currentTime);
+        $this->nextTimeout = $this->lossDetection->calculateLossDetectionTimeout($currentTime);
     }
 
     /**
@@ -155,7 +211,7 @@ final class Recovery
     public function cleanup(float $currentTime): void
     {
         $cutoffTime = $currentTime - 300.0; // 5分钟前的记录
-        
+
         $this->packetTracker->cleanupAckedPackets();
         $this->ackManager->cleanupOldRecords($cutoffTime);
         $this->retransmissionManager->cleanupExpiredRetransmissions($cutoffTime);
@@ -163,6 +219,8 @@ final class Recovery
 
     /**
      * 获取恢复机制的综合统计信息
+     *
+     * @return array<string, mixed>
      */
     public function getStats(): array
     {
@@ -210,8 +268,8 @@ final class Recovery
      */
     public function isConnectionHealthy(): bool
     {
-        return !$this->lossDetection->isInPersistentCongestion() &&
-               !$this->retransmissionManager->isInRetransmissionStorm();
+        return !$this->lossDetection->isInPersistentCongestion()
+               && !$this->retransmissionManager->isInRetransmissionStorm();
     }
 
     /**
@@ -222,15 +280,15 @@ final class Recovery
         if ($this->lossDetection->isInPersistentCongestion()) {
             return 'persistent_congestion';
         }
-        
+
         if ($this->retransmissionManager->isInRetransmissionStorm()) {
             return 'retransmission_storm';
         }
-        
+
         if ($this->getRetransmissionRate() > 0.1) {
             return 'high_loss_rate';
         }
-        
+
         return 'normal';
     }
 
@@ -261,4 +319,4 @@ final class Recovery
     {
         return $this->retransmissionManager;
     }
-} 
+}

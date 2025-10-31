@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace Tourze\QUIC\Recovery\Tests\Exception;
 
-use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use Tourze\PHPUnitBase\AbstractExceptionTestCase;
 use Tourze\QUIC\Recovery\Exception\InvalidPtoCountException;
 
 /**
  * InvalidPtoCountException 类测试
+ *
+ * @internal
  */
-final class InvalidPtoCountExceptionTest extends TestCase
+#[CoversClass(InvalidPtoCountException::class)]
+final class InvalidPtoCountExceptionTest extends AbstractExceptionTestCase
 {
     public function testExceptionIsInstanceOfInvalidArgumentException(): void
     {
         $exception = new InvalidPtoCountException('Test message');
-        
+
         $this->assertInstanceOf(\InvalidArgumentException::class, $exception);
     }
 
@@ -23,7 +27,7 @@ final class InvalidPtoCountExceptionTest extends TestCase
     {
         $message = 'PTO count is invalid';
         $exception = new InvalidPtoCountException($message);
-        
+
         $this->assertEquals($message, $exception->getMessage());
     }
 
@@ -31,7 +35,7 @@ final class InvalidPtoCountExceptionTest extends TestCase
     {
         $code = 456;
         $exception = new InvalidPtoCountException('Test message', $code);
-        
+
         $this->assertEquals($code, $exception->getCode());
     }
 
@@ -39,7 +43,7 @@ final class InvalidPtoCountExceptionTest extends TestCase
     {
         $previous = new \RuntimeException('Previous exception');
         $exception = new InvalidPtoCountException('Test message', 0, $previous);
-        
+
         $this->assertSame($previous, $exception->getPrevious());
     }
 }

@@ -16,20 +16,24 @@ final class AckManager
 {
     // 最大ACK延迟（毫秒）
     private const MAX_ACK_DELAY = 25;
-    
+
     // ACK频率阈值
     private const ACK_FREQUENCY_THRESHOLD = 2;
 
     /** @var array<int, float> 接收到的包号及其接收时间 */
     private array $receivedPackets = [];
-    
+
     /** @var array<int, bool> 需要确认的包号 */
     private array $packetsToAck = [];
-    
+
     private int $largestReceived = -1;
+
     private float $largestReceivedTime = 0.0;
+
     private int $ackElicitingReceived = 0;
+
     private bool $ackPending = false;
+
     private float $ackTimeout = 0.0;
 
     /**
@@ -38,7 +42,7 @@ final class AckManager
     public function onPacketReceived(
         int $packetNumber,
         float $receiveTime,
-        bool $ackEliciting = true
+        bool $ackEliciting = true,
     ): void {
         if ($packetNumber < 0) {
             throw new InvalidPacketNumberException('包号不能为负数');
@@ -59,9 +63,9 @@ final class AckManager
         }
 
         if ($ackEliciting) {
-            $this->ackElicitingReceived++;
+            ++$this->ackElicitingReceived;
             $this->ackPending = true;
-            
+
             // 设置ACK超时时间
             $this->ackTimeout = $receiveTime + self::MAX_ACK_DELAY;
         }
@@ -90,7 +94,7 @@ final class AckManager
      */
     public function generateAckFrame(float $currentTime): ?AckFrame
     {
-        if (empty($this->packetsToAck)) {
+        if ([] === $this->packetsToAck) {
             return null;
         }
 
@@ -102,8 +106,8 @@ final class AckManager
 
         // 构建ACK范围
         $ackRanges = $this->buildAckRanges();
-        
-        if (empty($ackRanges)) {
+
+        if ([] === $ackRanges) {
             return null;
         }
 
@@ -127,7 +131,7 @@ final class AckManager
      */
     private function buildAckRanges(): array
     {
-        if (empty($this->packetsToAck)) {
+        if ([] === $this->packetsToAck) {
             return [];
         }
 
@@ -138,9 +142,9 @@ final class AckManager
         $start = $packetNumbers[0];
         $end = $start;
 
-        for ($i = 1; $i < count($packetNumbers); $i++) {
+        for ($i = 1; $i < count($packetNumbers); ++$i) {
             $current = $packetNumbers[$i];
-            
+
             // 如果连续，扩展当前范围
             if ($current === $end + 1) {
                 $end = $current;
@@ -179,8 +183,8 @@ final class AckManager
     {
         foreach ($ackRanges as $range) {
             [$start, $end] = $range;
-            
-            for ($packetNumber = $start; $packetNumber <= $end; $packetNumber++) {
+
+            for ($packetNumber = $start; $packetNumber <= $end; ++$packetNumber) {
                 unset($this->packetsToAck[$packetNumber]);
             }
         }
@@ -198,9 +202,9 @@ final class AckManager
         }
 
         $missingPackets = [];
-        
+
         // 检查0到最大接收包号之间的缺失包
-        for ($i = 0; $i <= $this->largestReceived; $i++) {
+        for ($i = 0; $i <= $this->largestReceived; ++$i) {
             if (!isset($this->receivedPackets[$i])) {
                 $missingPackets[] = $i;
             }
@@ -230,7 +234,7 @@ final class AckManager
      */
     public function hasAckPending(): bool
     {
-        return $this->ackPending || !empty($this->packetsToAck);
+        return $this->ackPending || [] !== $this->packetsToAck;
     }
 
     /**
@@ -250,14 +254,15 @@ final class AckManager
     {
         foreach ($this->receivedPackets as $packetNumber => $receiveTime) {
             if ($receiveTime < $cutoffTime) {
-                unset($this->receivedPackets[$packetNumber]);
-                unset($this->packetsToAck[$packetNumber]);
+                unset($this->receivedPackets[$packetNumber], $this->packetsToAck[$packetNumber]);
             }
         }
     }
 
     /**
      * 获取统计信息
+     *
+     * @return array<string, mixed>
      */
     public function getStats(): array
     {
@@ -284,4 +289,4 @@ final class AckManager
         $this->ackPending = false;
         $this->ackTimeout = 0.0;
     }
-} 
+}

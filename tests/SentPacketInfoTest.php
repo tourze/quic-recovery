@@ -4,21 +4,50 @@ declare(strict_types=1);
 
 namespace Tourze\QUIC\Recovery\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Tourze\QUIC\Packets\Packet;
+use Tourze\QUIC\Packets\PacketType;
 use Tourze\QUIC\Recovery\SentPacketInfo;
 
 /**
- * SentPacketInfo测试
+ * @internal
  */
+#[CoversClass(SentPacketInfo::class)]
 final class SentPacketInfoTest extends TestCase
 {
     private Packet $packet;
 
     protected function setUp(): void
     {
-        $this->packet = $this->createMock(Packet::class);
-        $this->packet->method('getSize')->willReturn(1200);
+        parent::setUp();
+
+        $this->packet = $this->createMockPacket(1200);
+    }
+
+    private function createMockPacket(int $size): Packet
+    {
+        return new class($size) extends Packet {
+            public function __construct(private readonly int $size)
+            {
+                parent::__construct(PacketType::INITIAL, 1, '');
+            }
+
+            public function encode(): string
+            {
+                return str_repeat('x', $this->size);
+            }
+
+            public static function decode(string $data): static
+            {
+                return new self(strlen($data));
+            }
+
+            public function getSize(): int
+            {
+                return $this->size;
+            }
+        };
     }
 
     public function testConstructorAndGetters(): void
@@ -68,8 +97,7 @@ final class SentPacketInfoTest extends TestCase
 
     public function testDifferentPacketSizes(): void
     {
-        $packet = $this->createMock(Packet::class);
-        $packet->method('getSize')->willReturn(500);
+        $packet = $this->createMockPacket(500);
 
         $sentPacketInfo = new SentPacketInfo(
             1,
@@ -79,4 +107,4 @@ final class SentPacketInfoTest extends TestCase
 
         $this->assertSame(500, $sentPacketInfo->getSize());
     }
-} 
+}

@@ -1,38 +1,101 @@
 # QUIC Recovery Package
 
-QUIC协议丢包检测和恢复机制的完整实现，遵循RFC 9002规范。
+[English](README.md) | [中文](README.zh-CN.md)
 
-## 功能特性
+[![Latest Version](https://img.shields.io/packagist/v/tourze/quic-recovery.svg?style=flat-square)](https://packagist.org/packages/tourze/quic-recovery)
+[![PHP Version](https://img.shields.io/packagist/php-v/tourze/quic-recovery.svg?style=flat-square)](https://packagist.org/packages/tourze/quic-recovery)
+[![Build Status](https://github.com/tourze/php-monorepo/actions/workflows/phpunit.yml/badge.svg)](https://github.com/tourze/php-monorepo/actions/workflows/phpunit.yml)
+[![Total Downloads](https://img.shields.io/packagist/dt/tourze/quic-recovery.svg?style=flat-square)](https://packagist.org/packages/tourze/quic-recovery)
+[![License](https://img.shields.io/packagist/l/tourze/quic-recovery.svg?style=flat-square)](https://packagist.org/packages/tourze/quic-recovery)
+[![Code Coverage](https://img.shields.io/codecov/c/github/tourze/php-monorepo?style=flat-square)](https://codecov.io/gh/tourze/php-monorepo)
 
-- **RTT估算**：实现指数移动平均算法进行往返时间估算
-- **丢包检测**：支持基于时间和包号的丢包检测算法
-- **包追踪**：跟踪已发送数据包的状态和确认情况
-- **ACK管理**：自动生成和处理ACK帧
-- **重传管理**：智能重传策略，包括PTO探测和快速重传
+A complete implementation of QUIC protocol packet loss detection and recovery 
+mechanisms, following RFC 9002 specifications.
 
-## 安装
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation) 
+- [Usage](#usage)
+  - [Quick Start](#quick-start)
+  - [Creating Recovery Instance](#creating-recovery-instance)
+  - [When Sending Packets](#when-sending-packets)
+  - [When Receiving Packets](#when-receiving-packets)
+  - [Processing Received ACK](#processing-received-ack)
+  - [Handling Timeout Events](#handling-timeout-events)
+- [Dependencies](#dependencies)
+- [Advanced Usage](#advanced-usage)
+- [Components](#components)
+- [Configuration](#configuration)
+- [Error Handling](#error-handling)
+- [Performance Considerations](#performance-considerations)
+- [RFC Compliance](#rfc-compliance)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Features
+
+- **RTT Estimation**: Implements exponential moving average algorithm for round-trip time estimation
+- **Loss Detection**: Supports time-based and packet-number-based loss detection algorithms
+- **Packet Tracking**: Tracks sent packet status and acknowledgment information
+- **ACK Management**: Automatic ACK frame generation and processing
+- **Retransmission Management**: Smart retransmission strategy including PTO probing and fast retransmission
+
+## Installation
 
 ```bash
 composer require tourze/quic-recovery
 ```
 
-## 基本使用
+## Usage
 
-### 创建恢复机制实例
+### Quick Start
+
+```php
+<?php
+
+use Tourze\QUIC\Recovery\Recovery;
+
+// Create recovery instance with initial RTT of 333ms
+$recovery = new Recovery(333.0);
+
+// When sending a packet
+$recovery->onPacketSent(
+    packetNumber: 1,
+    packet: $packet,
+    sentTime: microtime(true) * 1000,
+    ackEliciting: true
+);
+
+// When receiving a packet
+$recovery->onPacketReceived(
+    packetNumber: 1,
+    receiveTime: microtime(true) * 1000,
+    ackEliciting: true
+);
+
+// Check if should send ACK immediately
+if ($recovery->shouldSendAckImmediately(microtime(true) * 1000)) {
+    $ackFrame = $recovery->generateAckFrame(microtime(true) * 1000);
+    // Send ACK frame...
+}
+```
+
+### Creating Recovery Instance
 
 ```php
 use Tourze\QUIC\Recovery\Recovery;
 
-// 创建恢复机制，设置初始RTT为333ms
+// Create recovery mechanism with initial RTT of 333ms
 $recovery = new Recovery(333.0);
 ```
 
-### 发送数据包时
+### When Sending Packets
 
 ```php
 use Tourze\QUIC\Packets\Packet;
 
-// 记录发送的数据包
+// Record sent packet
 $recovery->onPacketSent(
     packetNumber: 1,
     packet: $packet,
@@ -41,33 +104,33 @@ $recovery->onPacketSent(
 );
 ```
 
-### 接收数据包时
+### When Receiving Packets
 
 ```php
-// 记录接收到的数据包
+// Record received packet
 $recovery->onPacketReceived(
     packetNumber: 1,
     receiveTime: microtime(true) * 1000,
     ackEliciting: true
 );
 
-// 检查是否需要立即发送ACK
+// Check if should send ACK immediately
 if ($recovery->shouldSendAckImmediately(microtime(true) * 1000)) {
     $ackFrame = $recovery->generateAckFrame(microtime(true) * 1000);
-    // 发送ACK帧...
+    // Send ACK frame...
 }
 ```
 
-### 处理收到的ACK
+### Processing Received ACK
 
 ```php
 use Tourze\QUIC\Frames\AckFrame;
 
-// 当收到ACK帧时
+// When receiving ACK frame
 $recovery->onAckReceived($ackFrame, microtime(true) * 1000);
 ```
 
-### 处理超时事件
+### Handling Timeout Events
 
 ```php
 $currentTime = microtime(true) * 1000;
@@ -76,117 +139,128 @@ $actions = $recovery->onTimeout($currentTime);
 foreach ($actions as $action) {
     switch ($action['type']) {
         case 'retransmit_lost':
-            // 重传丢失的数据包
+            // Retransmit lost packets
             foreach ($action['packets'] as $packetNumber) {
-                // 重传逻辑...
+                // Retransmission logic...
             }
             break;
             
         case 'pto_probe':
-            // 发送PTO探测包
+            // Send PTO probe packets
             foreach ($action['packets'] as $probeInfo) {
-                // 探测逻辑...
+                // Probe logic...
             }
             break;
             
         case 'send_ack':
-            // 发送ACK帧
+            // Send ACK frame
             $ackFrame = $action['frame'];
-            // 发送逻辑...
+            // Send logic...
             break;
     }
 }
 ```
 
-## 高级使用
+## Dependencies
 
-### 获取统计信息
+- PHP 8.1 or higher
+- `tourze/quic-core` - Core QUIC protocol components
+- `tourze/quic-packets` - QUIC packet structures
+- `tourze/quic-frames` - QUIC frame structures
+
+## Advanced Usage
+
+### Getting Statistics
 
 ```php
 $stats = $recovery->getStats();
 
-echo "当前RTT: " . $recovery->getCurrentRtt() . "ms\n";
-echo "重传率: " . ($recovery->getRetransmissionRate() * 100) . "%\n";
-echo "连接健康: " . ($recovery->isConnectionHealthy() ? '是' : '否') . "\n";
-echo "拥塞建议: " . $recovery->getCongestionAdvice() . "\n";
+echo "Current RTT: " . $recovery->getCurrentRtt() . "ms\n";
+echo "Retransmission Rate: " . ($recovery->getRetransmissionRate() * 100) . "%\n";
+echo "Connection Healthy: " . ($recovery->isConnectionHealthy() ? 'Yes' : 'No') . "\n";
+echo "Congestion Advice: " . $recovery->getCongestionAdvice() . "\n";
 ```
 
-### 访问单独组件
+### Accessing Individual Components
 
 ```php
-// 获取RTT估算器
+// Get RTT estimator
 $rttEstimator = $recovery->getRttEstimator();
 $smoothedRtt = $rttEstimator->getSmoothedRtt();
 
-// 获取包追踪器
+// Get packet tracker
 $packetTracker = $recovery->getPacketTracker();
 $unackedCount = $packetTracker->getAckElicitingOutstanding();
 
-// 获取丢包检测器
+// Get loss detection
 $lossDetection = $recovery->getLossDetection();
 $ptoCount = $lossDetection->getPtoCount();
 ```
 
-### 定期清理
+### Periodic Cleanup
 
 ```php
-// 定期清理过期记录（建议每分钟执行一次）
+// Periodic cleanup of expired records (recommended every minute)
 $recovery->cleanup(microtime(true) * 1000);
 ```
 
-## 组件说明
+## Components
 
 ### RTTEstimator
-- 实现RFC 9002的RTT估算算法
-- 支持平滑RTT和RTT变异值计算
-- 提供PTO超时计算
+- Implements RFC 9002 RTT estimation algorithm
+- Supports smoothed RTT and RTT variance calculation
+- Provides PTO timeout calculation
 
 ### PacketTracker
-- 跟踪已发送数据包状态
-- 管理ACK确认和丢包标记
-- 支持包重排序检测
+- Tracks sent packet status
+- Manages ACK acknowledgments and loss marking
+- Supports packet reordering detection
 
 ### LossDetection
-- 基于包号差异的丢包检测
-- 基于时间阈值的丢包检测
-- PTO超时管理
+- Packet number gap-based loss detection
+- Time threshold-based loss detection
+- PTO timeout management
 
 ### AckManager
-- 自动ACK帧生成
-- ACK延迟控制
-- 缺失包检测
+- Automatic ACK frame generation
+- ACK delay control
+- Missing packet detection
 
 ### RetransmissionManager
-- 智能重传策略
-- 指数退避算法
-- 重传统计分析
+- Smart retransmission strategy
+- Exponential backoff algorithm
+- Retransmission statistics analysis
 
-## 配置选项
+## Configuration
 
 ```php
-// 自定义初始RTT
-$recovery = new Recovery(500.0); // 500ms初始RTT
+// Custom initial RTT
+$recovery = new Recovery(500.0); // 500ms initial RTT
 
-// 重置恢复机制状态
+// Reset recovery state
 $recovery->reset();
 ```
 
-## 错误处理
+## Error Handling
 
-所有方法都包含适当的参数验证，会在参数无效时抛出 `InvalidArgumentException`。
+All methods include proper parameter validation and will throw `InvalidArgumentException` for invalid parameters.
 
-## 性能考虑
+## Performance Considerations
 
-- 定期调用 `cleanup()` 方法清理过期记录
-- 监控重传率，避免重传风暴
-- 根据网络条件调整初始RTT值
+- Periodically call `cleanup()` method to clean expired records
+- Monitor retransmission rate to avoid retransmission storms
+- Adjust initial RTT value based on network conditions
 
-## RFC兼容性
+## RFC Compliance
 
-本实现严格遵循以下RFC规范：
+This implementation strictly follows the following RFC specifications:
 - [RFC 9000](https://tools.ietf.org/html/rfc9000) - QUIC: A UDP-Based Multiplexed and Secure Transport
 - [RFC 9002](https://tools.ietf.org/html/rfc9002) - QUIC Loss Detection and Congestion Control
 
-## 许可证
+## Contributing
 
-MIT License
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE) for more information.
