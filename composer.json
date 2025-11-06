@@ -4,9 +4,9 @@
   "type": "library",
   "license": "MIT",
   "require": {
-    "tourze/quic-core": "0.0.*",
-    "tourze/quic-frames": "0.0.*",
-    "tourze/quic-packets": "0.0.*"
+    "tourze/quic-core": "0.1.*",
+    "tourze/quic-frames": "0.1.*",
+    "tourze/quic-packets": "0.1.*"
   },
   "require-dev": {
     "phpstan/phpstan": "^2.1",
